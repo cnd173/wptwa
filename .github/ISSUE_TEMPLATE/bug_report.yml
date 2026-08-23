@@ -1,0 +1,53 @@
+name: Bug report
+description: Report reproducible incorrect behavior
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include poker credentials, financial information, or sensitive window titles.
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "14.6.1"
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Mac architecture
+      placeholder: Apple Silicon or Intel
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, financial data, and sensitive window titles from this report.
+          required: true

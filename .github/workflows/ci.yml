@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate package and scripts
+        env:
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/python-cache
+        run: |
+          plutil -lint macos/WPTTableArranger/Info.plist
+          bash -n macos/WPTTableArranger/build_app.sh
+          python3 -m py_compile legacy/windows/*.py
+
+      - name: Build
+        run: swift build --package-path macos/WPTTableArranger
+
+      - name: Test
+        run: swift test --package-path macos/WPTTableArranger
+
+      - name: Package development app
+        working-directory: macos/WPTTableArranger
+        run: ./build_app.sh

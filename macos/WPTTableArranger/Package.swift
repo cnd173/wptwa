@@ -1,0 +1,20 @@
+// swift-tools-version:5.9
+import PackageDescription
+
+let package = Package(
+    name: "PokerTableArranger",
+    platforms: [
+        .macOS(.v13)
+    ],
+    targets: [
+        .executableTarget(
+            name: "PokerTableArranger",
+            path: "Sources/WPTTableArranger"
+        ),
+        .testTarget(
+            name: "PokerTableArrangerTests",
+            dependencies: ["PokerTableArranger"],
+            path: "Tests/PokerTableArrangerTests"
+        )
+    ]
+)

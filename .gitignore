@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+build/
+dist/
+.build/
+*.app/
+.DS_Store
+.claude/
+DerivedData/
+*.xcarchive
+*.dmg
+*.pkg
+*.zip
+.swiftpm/
+release/
