@@ -20,10 +20,14 @@ UNIVERSAL="${UNIVERSAL:-0}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 RELEASE_DIR="${RELEASE_DIR:-$PWD/release}"
-SWIFT_BUILD_ARGS=()
-if [[ "${SWIFTPM_DISABLE_SANDBOX:-0}" == "1" ]]; then
-    SWIFT_BUILD_ARGS+=(--disable-sandbox)
-fi
+
+run_swift_build() {
+    if [[ "${SWIFTPM_DISABLE_SANDBOX:-0}" == "1" ]]; then
+        swift build --disable-sandbox "$@"
+    else
+        swift build "$@"
+    fi
+}
 
 stage_bundle() {
     local executable_path="$1"
@@ -35,12 +39,12 @@ stage_bundle() {
 
 if [[ "$UNIVERSAL" == "1" ]]; then
     echo "==> building arm64"
-    swift build "${SWIFT_BUILD_ARGS[@]}" -c release --triple arm64-apple-macosx13.0
-    ARM_BIN_DIR="$(swift build "${SWIFT_BUILD_ARGS[@]}" -c release --triple arm64-apple-macosx13.0 --show-bin-path)"
+    run_swift_build -c release --triple arm64-apple-macosx13.0
+    ARM_BIN_DIR="$(run_swift_build -c release --triple arm64-apple-macosx13.0 --show-bin-path)"
 
     echo "==> building x86_64"
-    swift build "${SWIFT_BUILD_ARGS[@]}" -c release --triple x86_64-apple-macosx13.0
-    INTEL_BIN_DIR="$(swift build "${SWIFT_BUILD_ARGS[@]}" -c release --triple x86_64-apple-macosx13.0 --show-bin-path)"
+    run_swift_build -c release --triple x86_64-apple-macosx13.0
+    INTEL_BIN_DIR="$(run_swift_build -c release --triple x86_64-apple-macosx13.0 --show-bin-path)"
 
     TEMP_DIR="$(mktemp -d)"
     trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -51,8 +55,8 @@ if [[ "$UNIVERSAL" == "1" ]]; then
     BUILT_BIN="$TEMP_DIR/$BIN_NAME"
 else
     echo "==> building native architecture"
-    swift build "${SWIFT_BUILD_ARGS[@]}" -c release
-    BIN_DIR="$(swift build "${SWIFT_BUILD_ARGS[@]}" -c release --show-bin-path)"
+    run_swift_build -c release
+    BIN_DIR="$(run_swift_build -c release --show-bin-path)"
     BUILT_BIN="$BIN_DIR/$BIN_NAME"
 fi
 
