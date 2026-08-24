@@ -58,4 +58,20 @@ final class PokerTableArrangerTests: XCTestCase {
             Slot(id: $0, x: 0, y: 0, width: 100, height: 100)
         }))
     }
+
+    func testSlotHitTestingAvoidsIntegerOverflow() {
+        let manager = SlotManager(
+            slots: [Slot(id: 1, x: Int.max - 10, y: Int.max - 10, width: 100, height: 100)],
+            magnetEnabled: false
+        )
+
+        XCTAssertNil(manager.slotAtPoint(0, 0))
+    }
+
+    func testMagnetSettingUpdatesOnSlotManagerQueue() {
+        let manager = SlotManager(slots: defaultSlots(screenWidth: 1920, screenHeight: 1080), magnetEnabled: false)
+
+        manager.updateMagnetEnabled(true)
+        XCTAssertTrue(manager.queue.sync { manager.isMagnetEnabledOnQueue() })
+    }
 }

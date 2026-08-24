@@ -12,7 +12,7 @@ final class AppModel: ObservableObject {
     @Published var arranging = false
     @Published var magnetEnabled: Bool {
         didSet {
-            slotManager.magnetEnabled = magnetEnabled
+            slotManager.updateMagnetEnabled(magnetEnabled)
             Store.updateSettings { $0.magnetEnabled = magnetEnabled }
         }
     }

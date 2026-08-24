@@ -31,7 +31,7 @@ final class SlotManager {
     private var running = false
     private var pollTimer: DispatchSourceTimer?
 
-    var magnetEnabled: Bool
+    private var magnetEnabled: Bool
     var onStatusChange: ((ArrangementStatus) -> Void)?
 
     var dragWatcher: DragWatcher?
@@ -48,6 +48,10 @@ final class SlotManager {
             setRects.removeAll()
             actualRects.removeAll()
         }
+    }
+
+    func updateMagnetEnabled(_ enabled: Bool) {
+        queue.async { [weak self] in self?.magnetEnabled = enabled }
     }
 
     func start() {
@@ -229,8 +233,10 @@ final class SlotManager {
 
     func slotAtPoint(_ x: Double, _ y: Double) -> Slot? {
         slots.first {
-            Double($0.x) <= x && x <= Double($0.x + $0.width) &&
-            Double($0.y) <= y && y <= Double($0.y + $0.height)
+            let left = Double($0.x)
+            let top = Double($0.y)
+            return left <= x && x <= left + Double($0.width) &&
+                top <= y && y <= top + Double($0.height)
         }
     }
 
@@ -250,6 +256,7 @@ final class SlotManager {
 
     func currentAssignments() -> [AXWindow: Int] { assignments }
     func currentActualRects() -> [AXWindow: WindowRect] { actualRects }
+    func isMagnetEnabledOnQueue() -> Bool { magnetEnabled }
 
     func assignedSlotId(for window: AXWindow) -> Int? { assignments[window] }
 

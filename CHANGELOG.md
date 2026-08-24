@@ -15,4 +15,6 @@ All notable user-facing changes will be documented here. This project follows Se
 - Stopped writing AX window sizes; arrangement now preserves WPT-managed natural sizes.
 - Removed network/process monitoring from the macOS app.
 - Added slot validation and hardened the archived Windows adapter.
+- Serialized magnet-setting changes and hardened slot hit-testing against integer overflow.
 - Pinned GitHub Actions and synchronized release bundle versions with tags.
+- Added SHA-256 checksums to the signed-release workflow.

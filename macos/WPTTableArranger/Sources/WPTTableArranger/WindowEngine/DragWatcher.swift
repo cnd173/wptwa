@@ -80,7 +80,7 @@ final class DragWatcher {
 
         var targetSlot = slotManager.slotAtPoint(cx, cy)
         if targetSlot == nil {
-            guard slotManager.magnetEnabled else { return } // leave it wherever the user dropped it
+            guard slotManager.isMagnetEnabledOnQueue() else { return } // leave it wherever the user dropped it
             targetSlot = slotManager.nearestSlotToPoint(cx, cy)
             guard targetSlot != nil else { return }
         }
