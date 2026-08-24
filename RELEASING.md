@@ -27,7 +27,13 @@ spctl --assess --type execute --verbose=4 "Poker Table Arranger.app"
 xcrun stapler validate "Poker Table Arranger.app"
 ```
 
-The distributable ZIP is written to `macos/WPTTableArranger/release/`.
+The distributable ZIP is written to `macos/WPTTableArranger/release/`. For a
+manual release, publish a SHA-256 checksum alongside it:
+
+```bash
+cd macos/WPTTableArranger/release
+shasum -a 256 "Poker Table Arranger.zip" > SHA256SUMS
+```
 
 ## GitHub tag release
 
@@ -42,4 +48,4 @@ The release workflow runs for tags matching `v*`. Configure these repository sec
 
 Then update `CHANGELOG.md`, commit, and create a SemVer tag such as `v0.1.0`. Never place certificates, passwords, API keys, or notary credentials in the repository.
 
-The tag version is injected into `CFBundleShortVersionString` and the GitHub run number into `CFBundleVersion` during the release build. The checked-in development version remains `0.1.0`.
+The tag version is injected into `CFBundleShortVersionString` and the GitHub run number into `CFBundleVersion` during the release build. The checked-in development version remains `0.1.0`. The workflow publishes both the notarized ZIP and `SHA256SUMS`.

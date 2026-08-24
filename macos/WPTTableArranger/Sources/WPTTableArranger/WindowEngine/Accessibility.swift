@@ -63,8 +63,10 @@ final class AXWindow: Hashable {
     func position() -> CGPoint? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &value) == .success,
-              let axValue = value as? AXValue,
-              AXValueGetType(axValue) == .cgPoint else { return nil }
+              let rawValue = value,
+              CFGetTypeID(rawValue) == AXValueGetTypeID() else { return nil }
+        let axValue = rawValue as! AXValue
+        guard AXValueGetType(axValue) == .cgPoint else { return nil }
         var point = CGPoint.zero
         guard AXValueGetValue(axValue, .cgPoint, &point) else { return nil }
         return point
@@ -73,8 +75,10 @@ final class AXWindow: Hashable {
     func size() -> CGSize? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &value) == .success,
-              let axValue = value as? AXValue,
-              AXValueGetType(axValue) == .cgSize else { return nil }
+              let rawValue = value,
+              CFGetTypeID(rawValue) == AXValueGetTypeID() else { return nil }
+        let axValue = rawValue as! AXValue
+        guard AXValueGetType(axValue) == .cgSize else { return nil }
         var s = CGSize.zero
         guard AXValueGetValue(axValue, .cgSize, &s) else { return nil }
         return s

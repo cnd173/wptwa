@@ -67,11 +67,16 @@ jobs:
           NOTARY_PROFILE=release-notary \
           ./build_app.sh
 
+      - name: Create SHA-256 checksum
+        working-directory: macos/WPTTableArranger/release
+        run: shasum -a 256 "Poker Table Arranger.zip" > SHA256SUMS
+
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             "macos/WPTTableArranger/release/Poker Table Arranger.zip" \
+            "macos/WPTTableArranger/release/SHA256SUMS" \
             --generate-notes \
             --verify-tag
