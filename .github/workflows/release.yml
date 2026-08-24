@@ -20,7 +20,7 @@ jobs:
       MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
       KEYCHAIN_PASSWORD: temporary-ci-keychain-password
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Validate required release secrets
         env:
@@ -39,7 +39,7 @@ jobs:
         run: |
           CERTIFICATE_PATH="$RUNNER_TEMP/developer-id.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/release-signing.keychain-db"
-          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > "$CERTIFICATE_PATH"
+          printf '%s' "$MACOS_CERTIFICATE_P12" | base64 --decode > "$CERTIFICATE_PATH"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -61,6 +61,8 @@ jobs:
         working-directory: macos/WPTTableArranger
         run: |
           UNIVERSAL=1 \
+          APP_VERSION="${GITHUB_REF_NAME#v}" \
+          BUILD_NUMBER="$GITHUB_RUN_NUMBER" \
           SIGN_IDENTITY="$DEVELOPER_ID_APPLICATION" \
           NOTARY_PROFILE=release-notary \
           ./build_app.sh

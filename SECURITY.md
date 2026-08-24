@@ -12,4 +12,4 @@ Use GitHub's **Report a vulnerability** feature in the repository's Security tab
 
 ## Security boundaries
 
-This app requires macOS Accessibility permission, which is powerful. Changes that broaden process matching, automate poker actions, capture the screen, inspect game data, or transmit user data are outside the project's intended scope and will not be accepted.
+This app requires macOS Accessibility permission, which is powerful. Changes that broaden process/window matching, force client-controlled window sizes, automate poker actions, capture the screen, inspect game/network data, monitor poker-client performance, automatically track sessions, or transmit user data are outside the project's intended scope and will not be accepted.

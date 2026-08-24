@@ -6,3 +6,9 @@ updates:
       interval: monthly
     labels:
       - dependencies
+  - package-ecosystem: pip
+    directory: /legacy/windows
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies

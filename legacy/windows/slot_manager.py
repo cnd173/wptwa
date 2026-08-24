@@ -125,7 +125,8 @@ class SlotManager:
                     self._apply_position(hwnd, slot)
 
         if self._on_status:
-            self._on_status(len(self._assignments))
+            table_count = sum(1 for hwnd in self._assignments if hwnd in table_hwnds)
+            self._on_status(table_count)
 
     def _apply_position(self, hwnd, slot):
         """Move hwnd to slot only if we haven't already placed it there. Caller holds lock."""

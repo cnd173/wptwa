@@ -54,6 +54,7 @@ enum WindowManager {
                 case .lobby: result.lobby.append(win)
                 case .history: result.history.append(win)
                 case .table: result.table.append(win)
+                case .ignored: continue
                 }
             }
         }

@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import Combine
 
-enum SessionState {
+enum SessionState: Equatable {
     case stopped, running, paused
 }
 
@@ -34,10 +34,8 @@ final class AppModel: ObservableObject {
     private var sessionElapsed: TimeInterval = 0
     private var sessionMonotonicStart: TimeInterval?
     private var sessionWallStart: Date?
-    private var prevTableCount = 0
     private var timerLoop: Timer?
 
-    var monitorWindow: NSWindowController?
     var bankrollWindow: NSWindowController?
     var slotEditorWindow: NSWindowController?
     var bankrollEntryWindow: NSWindowController?
@@ -53,7 +51,7 @@ final class AppModel: ObservableObject {
 
         let manager = SlotManager(slots: loadedSlots, magnetEnabled: settings.magnetEnabled)
         slotManager = manager
-        manager.onStatusChange = { [weak self] count in self?.handleStatusChange(count) }
+        manager.onStatusChange = { [weak self] status in self?.handleStatusChange(status) }
 
         refreshPresets()
     }
@@ -87,28 +85,12 @@ final class AppModel: ObservableObject {
         slotManager.swapSlots(a, b)
     }
 
-    private func handleStatusChange(_ count: Int) {
+    private func handleStatusChange(_ status: ArrangementStatus) {
         if arranging {
-            statusText = t("status_arranging", ["n": count])
-            dotColor = count > 0 ? Palette.green : Palette.accent
-            occupiedSlotIds = slotManager.getOccupiedSlotIds()
+            statusText = t("status_arranging", ["n": status.tableCount])
+            dotColor = status.tableCount > 0 ? Palette.green : Palette.accent
+            occupiedSlotIds = status.occupiedSlotIds
         }
-
-        let wasTables = prevTableCount > 0
-        let nowTables = count > 0
-
-        if !wasTables && nowTables {
-            sessionElapsed = 0
-            sessionWallStart = Date()
-            stopTimerLoop()
-            sessionMonotonicStart = ProcessInfo.processInfo.systemUptime
-            sessionState = .running
-            startTimerLoop()
-            renderTimer()
-        } else if wasTables && !nowTables && sessionState == .running {
-            timerStop()
-        }
-        prevTableCount = count
     }
 
     // MARK: - Session timer
@@ -119,6 +101,10 @@ final class AppModel: ObservableObject {
 
     func timerResume() {
         guard sessionState != .running else { return }
+        if sessionState == .stopped {
+            sessionElapsed = 0
+            sessionWallStart = Date()
+        }
         sessionMonotonicStart = ProcessInfo.processInfo.systemUptime
         sessionState = .running
         startTimerLoop()
@@ -135,18 +121,22 @@ final class AppModel: ObservableObject {
     }
 
     func timerStop() {
+        guard sessionState != .stopped else { return }
         if sessionState == .running {
             sessionElapsed += ProcessInfo.processInfo.systemUptime - (sessionMonotonicStart ?? ProcessInfo.processInfo.systemUptime)
         }
+        let completedElapsed = sessionElapsed
+        let completedStart = sessionWallStart
         sessionMonotonicStart = nil
         sessionState = .stopped
         stopTimerLoop()
+        sessionElapsed = 0
+        sessionWallStart = nil
         renderTimer()
 
-        if let wallStart = sessionWallStart, sessionElapsed > 0 {
-            showBankrollPrompt(start: wallStart, end: Date(), elapsed: sessionElapsed)
+        if let wallStart = completedStart, completedElapsed > 0 {
+            showBankrollPrompt(start: wallStart, end: Date(), elapsed: completedElapsed)
         }
-        sessionWallStart = nil
     }
 
     private func showBankrollPrompt(start: Date, end: Date, elapsed: TimeInterval) {
@@ -209,8 +199,9 @@ final class AppModel: ObservableObject {
     // MARK: - Slots / editor
 
     func updateSlots(_ newSlots: [Slot]) {
-        slots = newSlots
-        if arranging { slotManager.updateSlots(newSlots) }
+        guard let normalized = SlotLayoutValidator.normalized(newSlots) else { return }
+        slots = normalized
+        if arranging { slotManager.updateSlots(normalized) }
     }
 
     // MARK: - Presets
@@ -237,11 +228,13 @@ final class AppModel: ObservableObject {
     }
 
     func loadSelectedPreset() {
-        guard let name = selectedPreset, let presetSlots = presets[name] else { return }
-        slots = presetSlots
-        Store.saveConfig(presetSlots)
+        guard let name = selectedPreset,
+              let presetSlots = presets[name],
+              let normalized = SlotLayoutValidator.normalized(presetSlots) else { return }
+        slots = normalized
+        Store.saveConfig(normalized)
         Store.updateSettings { $0.lastPreset = name }
-        if arranging { slotManager.updateSlots(presetSlots) }
+        if arranging { slotManager.updateSlots(normalized) }
     }
 
     func deleteSelectedPreset() {

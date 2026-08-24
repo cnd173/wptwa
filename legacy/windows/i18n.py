@@ -2,26 +2,6 @@ from config import load_settings
 
 STRINGS = {
     "en": {
-        # Monitor window
-        "monitor_title":      "Network & Performance",
-        "monitor_detecting":  "detecting server…",
-        "monitor_pinging":    "Pinging: {target}",
-        "monitor_network":    "NETWORK",
-        "avg_ms":             "avg  {v} ms",
-        "max_ms":             "max  {v} ms",
-        "loss_pct":           "loss  {pct}%  ({loss}/{total})",
-        "monitor_processes":  "PROCESSES",
-        "col_cpu":            "CPU",
-        "col_ram":            "RAM",
-        "proc_wpt":           "● WPT Poker",
-        "proc_app":           "● Table Arranger",
-        "ping_timeout":       "timeout",
-        "graph_collecting":   "collecting…",
-        "ping_placeholder":   "— ms",
-        "avg_placeholder":    "avg  — ms",
-        "max_placeholder":    "max  — ms",
-        "loss_placeholder":   "loss  —",
-
         # Bankroll
         "bankroll_title":       "Bankroll",
         "sessions_tracked":     "{n} session(s) tracked",
@@ -70,7 +50,6 @@ STRINGS = {
         "stop_arranging":      "■  Stop Arranging",
         "btn_slots":           "⚙ Slots",
         "btn_reset":           "⟳ Reset",
-        "btn_stats":           "📊 Stats",
         "btn_bankroll":        "💰 Bankroll",
         "btn_log_entry":       "📝 Log",
         "start_with_windows":  "Start with Windows",
@@ -91,26 +70,6 @@ STRINGS = {
         "no_presets":          "(no presets saved)",
     },
     "vi": {
-        # Monitor window
-        "monitor_title":      "Mạng & Hiệu năng",
-        "monitor_detecting":  "đang dò server…",
-        "monitor_pinging":    "Đang ping: {target}",
-        "monitor_network":    "MẠNG",
-        "avg_ms":             "TB  {v} ms",
-        "max_ms":             "Cao nhất  {v} ms",
-        "loss_pct":           "Mất gói  {pct}%  ({loss}/{total})",
-        "monitor_processes":  "TIẾN TRÌNH",
-        "col_cpu":            "CPU",
-        "col_ram":            "RAM",
-        "proc_wpt":           "● WPT Poker",
-        "proc_app":           "● Table Arranger",
-        "ping_timeout":       "mất kết nối",
-        "graph_collecting":   "đang thu thập…",
-        "ping_placeholder":   "— ms",
-        "avg_placeholder":    "TB  — ms",
-        "max_placeholder":    "Cao nhất  — ms",
-        "loss_placeholder":   "Mất gói  —",
-
         # Bankroll
         "bankroll_title":       "Bankroll",
         "sessions_tracked":     "{n} session đã ghi nhận",
@@ -159,7 +118,6 @@ STRINGS = {
         "stop_arranging":      "■  Dừng Sắp Xếp",
         "btn_slots":           "⚙ Slot",
         "btn_reset":           "⟳ Làm Mới",
-        "btn_stats":           "📊 Thống Kê",
         "btn_bankroll":        "💰 Bankroll",
         "btn_log_entry":       "📝 Ghi",
         "start_with_windows":  "Khởi động cùng Windows",

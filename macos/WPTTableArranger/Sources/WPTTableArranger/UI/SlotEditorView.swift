@@ -124,8 +124,12 @@ struct SlotEditorView: View {
 
     private func save() {
         renumber()
-        Store.saveConfig(slots)
-        onSave(slots)
+        guard let normalized = SlotLayoutValidator.normalized(slots) else {
+            alert = AlertInfo(title: t("invalid_value_title"), message: t("invalid_dimensions_msg"))
+            return
+        }
+        Store.saveConfig(normalized)
+        onSave(normalized)
         hostWindow?.close()
     }
 }

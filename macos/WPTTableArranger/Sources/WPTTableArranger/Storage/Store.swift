@@ -39,8 +39,10 @@ enum Store {
     // MARK: - Slot config (mirrors load_config/save_config)
 
     static func loadConfig() -> [Slot] {
-        if let slots = loadJSON(configFile, as: [Slot].self), !slots.isEmpty {
-            return slots
+        if let slots = loadJSON(configFile, as: [Slot].self),
+           let normalized = SlotLayoutValidator.normalized(slots) {
+            if normalized != slots { saveConfig(normalized) }
+            return normalized
         }
         let screen = NSScreen.main?.frame.size ?? CGSize(width: 1920, height: 1080)
         let slots = defaultSlots(screenWidth: Int(screen.width), screenHeight: Int(screen.height))
@@ -49,18 +51,25 @@ enum Store {
     }
 
     static func saveConfig(_ slots: [Slot]) {
-        saveJSON(slots, to: configFile)
+        guard let normalized = SlotLayoutValidator.normalized(slots) else { return }
+        saveJSON(normalized, to: configFile)
     }
 
     // MARK: - Presets (mirrors load_presets/save_preset/delete_preset)
 
     static func loadPresets() -> [String: [Slot]] {
-        loadJSON(presetsFile, as: [String: [Slot]].self) ?? [:]
+        let decoded = loadJSON(presetsFile, as: [String: [Slot]].self) ?? [:]
+        return decoded.reduce(into: [:]) { result, item in
+            if let normalized = SlotLayoutValidator.normalized(item.value) {
+                result[item.key] = normalized
+            }
+        }
     }
 
     static func savePreset(_ name: String, slots: [Slot]) {
+        guard let normalized = SlotLayoutValidator.normalized(slots) else { return }
         var presets = loadPresets()
-        presets[name] = slots
+        presets[name] = normalized
         saveJSON(presets, to: presetsFile)
     }
 

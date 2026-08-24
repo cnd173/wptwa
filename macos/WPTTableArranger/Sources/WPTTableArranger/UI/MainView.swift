@@ -91,6 +91,16 @@ struct MainView: View {
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Palette.card)
                     .cornerRadius(3)
+                    .help(model.sessionState == .running ? t("pause_session") : t("start_session"))
+                Button("■") { model.timerStop() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(model.sessionState == .stopped ? Palette.dim : Palette.text)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Palette.card)
+                    .cornerRadius(3)
+                    .disabled(model.sessionState == .stopped)
+                    .help(t("stop_session"))
             }
 
             ActionButton(
@@ -104,8 +114,6 @@ struct MainView: View {
                              font: .system(size: 8, weight: .bold)) { openSlotEditor() }
                 ActionButton(title: t("btn_reset"), bg: Palette.card, fg: Palette.text,
                              font: .system(size: 8, weight: .bold)) { model.rearrange() }
-                ActionButton(title: t("btn_stats"), bg: Palette.card, fg: Palette.text,
-                             font: .system(size: 8, weight: .bold)) { openMonitor() }
                 ActionButton(title: t("btn_bankroll"), bg: Palette.card, fg: Palette.text,
                              font: .system(size: 8, weight: .bold)) { openBankroll() }
             }
@@ -179,16 +187,6 @@ struct MainView: View {
             }
         )
         model.slotEditorWindow = controller
-        controller.show()
-    }
-
-    private func openMonitor() {
-        if let existing = model.monitorWindow, existing.window?.isVisible == true {
-            existing.window?.makeKeyAndOrderFront(nil)
-            return
-        }
-        let controller = PanelWindowController(title: t("monitor_title"), width: 320, height: 300, content: MonitorView())
-        model.monitorWindow = controller
         controller.show()
     }
 

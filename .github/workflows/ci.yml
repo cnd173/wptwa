@@ -18,7 +18,7 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Validate package and scripts
         env:
@@ -29,7 +29,7 @@ jobs:
           python3 -m py_compile legacy/windows/*.py
 
       - name: Build
-        run: swift build --package-path macos/WPTTableArranger
+        run: swift build --package-path macos/WPTTableArranger -Xswiftc -warnings-as-errors
 
       - name: Test
         run: swift test --package-path macos/WPTTableArranger

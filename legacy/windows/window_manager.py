@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import win32gui
 import win32process
@@ -7,7 +8,7 @@ import win32con
 import psutil
 
 _OWN_PID          = os.getpid()
-_PROCESS_KEYWORDS = ["wpt", "poker"]
+_PROCESS_NAMES    = {"wptglobal.exe", "wpt global.exe"}
 _HISTORY_KEYWORDS = ["hand history", "handhistory", "hand-history"]
 
 # Table titles after WPT update: "HLB7110 - 0.05/0.10/0.20(0.05) - NLHE"
@@ -31,7 +32,7 @@ def _refresh_pids():
     for proc in psutil.process_iter(["pid", "name"]):
         name = proc.info.get("name", "").lower()
         pid  = proc.info["pid"]
-        if pid != _OWN_PID and any(k in name for k in _PROCESS_KEYWORDS):
+        if pid != _OWN_PID and name in _PROCESS_NAMES:
             pids.add(pid)
     _wpt_pids = pids
 
@@ -41,13 +42,15 @@ def _is_visible_top_level(hwnd):
 
 
 def _classify(title):
-    t = title.lower()
+    t = title.strip().lower()
     if any(k in t for k in _HISTORY_KEYWORDS):
         return "history"
-    # Tables start with "HL" table-ID prefix or end with a known game type
-    if t.startswith("hl") or any(t.endswith(g) for g in _TABLE_GAME_TYPES):
+    first = t.split(" ", 1)[0]
+    if re.fullmatch(r"hl[a-z0-9]{2,}", first) or any(t.endswith(g) for g in _TABLE_GAME_TYPES):
         return "table"
-    return "lobby"
+    if t == "wpt global" or re.fullmatch(r"(?:[01]?\d|2[0-3]):[0-5]\d\s+.+\s+time", t):
+        return "lobby"
+    return None
 
 
 def classify_wpt_windows():
@@ -70,7 +73,9 @@ def classify_wpt_windows():
         title = win32gui.GetWindowText(hwnd)
         if not title:
             return
-        result[_classify(title)].append(hwnd)
+        kind = _classify(title)
+        if kind is not None:
+            result[kind].append(hwnd)
 
     win32gui.EnumWindows(callback, None)
     return result

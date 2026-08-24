@@ -1,8 +1,5 @@
-import collections
 import csv
 import os
-import re
-import subprocess
 import sys
 import threading
 import time
@@ -10,7 +7,6 @@ import tkinter as tk
 from datetime import datetime
 from tkinter import messagebox, simpledialog, ttk
 
-import psutil
 import pystray
 from PIL import Image, ImageDraw
 
@@ -19,7 +15,6 @@ from config import (load_config, save_config, default_slots, get_screen_size,
                     load_settings, save_settings, REG_KEY, SESSION_LOG_FILE,
                     is_autostart_enabled, set_autostart)
 from slot_manager import LOBBY_SLOT_IDX, HISTORY_SLOT_IDX, SlotManager
-from window_manager import get_wpt_pids
 from i18n import t, get_language, set_language
 
 # ── Palette ───────────────────────────────────────────────────
@@ -68,259 +63,6 @@ def _btn(parent, text, cmd, bg, fg=TEXT, width=None,
     return b
 
 
-# ── Monitor helpers ───────────────────────────────────────────
-
-_OWN_PID = os.getpid()
-PING_HISTORY    = 60
-MONITOR_MS      = 2000   # UI refresh interval
-
-
-def _do_ping(host):
-    try:
-        out = subprocess.check_output(
-            ["ping", "-n", "1", "-w", "2000", host],
-            stderr=subprocess.DEVNULL,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        ).decode("cp850", errors="ignore")
-        m = re.search(r"[=<](\d+)ms", out)
-        return int(m.group(1)) if m else None
-    except Exception:
-        return None
-
-
-def _detect_wpt_server():
-    for pid in get_wpt_pids():
-        try:
-            for c in psutil.Process(pid).connections(kind="inet"):
-                if c.status == "ESTABLISHED" and c.raddr:
-                    ip = c.raddr.ip
-                    if not (ip.startswith("127.") or ip.startswith("192.168.")
-                            or ip.startswith("10.") or ip == "::1"):
-                        return ip
-        except Exception:
-            pass
-    return "wptglobal.com"
-
-
-def _proc_stats(keyword):
-    for proc in psutil.process_iter(["pid", "name", "cpu_percent", "memory_info"]):
-        try:
-            if keyword in proc.info["name"].lower() and proc.info["pid"] != _OWN_PID:
-                return proc.cpu_percent(interval=None), \
-                       proc.info["memory_info"].rss // (1024 * 1024)
-        except Exception:
-            pass
-    return None, None
-
-
-def _own_stats():
-    try:
-        p = psutil.Process(_OWN_PID)
-        return p.cpu_percent(interval=None), p.memory_info().rss // (1024 * 1024)
-    except Exception:
-        return 0.0, 0
-
-
-# ── Monitor window ────────────────────────────────────────────
-
-class MonitorWindow(tk.Toplevel):
-    GRAPH_W, GRAPH_H = 400, 80
-
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.title(t("monitor_title"))
-        self.resizable(False, False)
-        self.configure(bg=BG)
-        self.attributes("-topmost", True)
-
-        self._pings      = collections.deque(maxlen=PING_HISTORY)
-        self._loss       = 0
-        self._total      = 0
-        self._target     = None
-        self._after_id   = None
-        self._closed     = False
-
-        self._build()
-        self.protocol("WM_DELETE_WINDOW", self._on_close)
-
-        # Warm up cpu_percent (first call always returns 0.0)
-        psutil.Process(_OWN_PID).cpu_percent(interval=None)
-        _proc_stats("wpt")
-
-        self._detect()
-        self._tick()
-
-    # ── Build UI ──────────────────────────────────────────────
-
-    def _build(self):
-        hdr = tk.Frame(self, bg=SURFACE, padx=16, pady=10)
-        hdr.pack(fill="x")
-        tk.Label(hdr, text=t("monitor_title"), bg=SURFACE, fg=TEXT,
-                 font=("Segoe UI", 12, "bold")).pack(side="left")
-        self._server_var = tk.StringVar(value=t("monitor_detecting"))
-        tk.Label(hdr, textvariable=self._server_var, bg=SURFACE, fg=DIM,
-                 font=("Segoe UI", 8)).pack(side="right")
-
-        body = tk.Frame(self, bg=BG, padx=16, pady=12)
-        body.pack(fill="both")
-
-        # ── Network section ───────────────────────────────────
-        tk.Label(body, text=t("monitor_network"), bg=BG, fg=DIM,
-                 font=("Segoe UI", 7, "bold")).pack(anchor="w", pady=(0, 4))
-
-        self._graph = tk.Canvas(body, width=self.GRAPH_W, height=self.GRAPH_H,
-                                bg=BG, highlightthickness=1,
-                                highlightbackground=BORDER)
-        self._graph.pack(pady=(0, 6))
-
-        stat_row = tk.Frame(body, bg=BG)
-        stat_row.pack(fill="x", pady=(0, 10))
-
-        self._ping_var = tk.StringVar(value=t("ping_placeholder"))
-        self._ping_lbl = tk.Label(stat_row, textvariable=self._ping_var,
-                                   bg=BG, fg=TEXT, font=("Segoe UI", 22, "bold"))
-        self._ping_lbl.pack(side="left", padx=(0, 16))
-
-        detail = tk.Frame(stat_row, bg=BG)
-        detail.pack(side="left")
-        self._avg_var  = tk.StringVar(value=t("avg_placeholder"))
-        self._max_var  = tk.StringVar(value=t("max_placeholder"))
-        self._loss_var = tk.StringVar(value=t("loss_placeholder"))
-        for v in (self._avg_var, self._max_var, self._loss_var):
-            tk.Label(detail, textvariable=v, bg=BG, fg=DIM,
-                     font=("Segoe UI", 8)).pack(anchor="w")
-
-        # ── Process section ───────────────────────────────────
-        tk.Frame(body, bg=BORDER, height=1).pack(fill="x", pady=(0, 8))
-        tk.Label(body, text=t("monitor_processes"), bg=BG, fg=DIM,
-                 font=("Segoe UI", 7, "bold")).pack(anchor="w", pady=(0, 6))
-
-        grid = tk.Frame(body, bg=BG)
-        grid.pack(fill="x")
-
-        for c, (hd, w) in enumerate([("", 16), (t("col_cpu"), 8), (t("col_ram"), 10)]):
-            tk.Label(grid, text=hd, bg=BG, fg=DIM, width=w,
-                     font=("Segoe UI", 8, "bold"), anchor="w").grid(row=0, column=c, padx=4)
-
-        self._wpt_cpu = tk.StringVar(value="—")
-        self._wpt_ram = tk.StringVar(value="—")
-        tk.Label(grid, text=t("proc_wpt"), bg=BG, fg=ACCENT, width=16,
-                 font=("Segoe UI", 9), anchor="w").grid(row=1, column=0, padx=4, pady=2)
-        tk.Label(grid, textvariable=self._wpt_cpu, bg=BG, fg=TEXT, width=8,
-                 font=("Segoe UI", 9), anchor="w").grid(row=1, column=1, padx=4)
-        tk.Label(grid, textvariable=self._wpt_ram, bg=BG, fg=TEXT, width=10,
-                 font=("Segoe UI", 9), anchor="w").grid(row=1, column=2, padx=4)
-
-        self._app_cpu = tk.StringVar(value="—")
-        self._app_ram = tk.StringVar(value="—")
-        tk.Label(grid, text=t("proc_app"), bg=BG, fg=GREEN, width=16,
-                 font=("Segoe UI", 9), anchor="w").grid(row=2, column=0, padx=4, pady=2)
-        tk.Label(grid, textvariable=self._app_cpu, bg=BG, fg=TEXT, width=8,
-                 font=("Segoe UI", 9), anchor="w").grid(row=2, column=1, padx=4)
-        tk.Label(grid, textvariable=self._app_ram, bg=BG, fg=TEXT, width=10,
-                 font=("Segoe UI", 9), anchor="w").grid(row=2, column=2, padx=4)
-
-    # ── Data collection ───────────────────────────────────────
-
-    def _detect(self):
-        def run():
-            target = _detect_wpt_server()
-            self._target = target
-            if not self._closed:
-                self.after(0, self._server_var.set, t("monitor_pinging", target=target))
-        threading.Thread(target=run, daemon=True).start()
-
-    def _tick(self):
-        if self._closed:
-            return
-        threading.Thread(target=self._collect, daemon=True).start()
-        self._after_id = self.after(MONITOR_MS, self._tick)
-
-    def _collect(self):
-        ping  = _do_ping(self._target) if self._target else None
-        self._total += 1
-        if ping is None:
-            self._loss += 1
-        else:
-            self._pings.append(ping)
-
-        wpt_cpu, wpt_ram = _proc_stats("wpt")
-        app_cpu, app_ram = _own_stats()
-
-        if not self._closed:
-            self.after(0, self._update, ping, wpt_cpu, wpt_ram, app_cpu, app_ram)
-
-    def _update(self, ping, wpt_cpu, wpt_ram, app_cpu, app_ram):
-        # Ping label
-        if ping is not None:
-            color = GREEN if ping < 50 else (YELLOW if ping < 100 else RED)
-            self._ping_var.set(f"{ping} ms")
-        else:
-            color = RED
-            self._ping_var.set(t("ping_timeout"))
-        self._ping_lbl.config(fg=color)
-
-        if self._pings:
-            avg = int(sum(self._pings) / len(self._pings))
-            self._avg_var.set(t("avg_ms", v=avg))
-            self._max_var.set(t("max_ms", v=max(self._pings)))
-        loss_pct = int(self._loss / max(1, self._total) * 100)
-        self._loss_var.set(t("loss_pct", pct=loss_pct, loss=self._loss, total=self._total))
-
-        self._draw_graph()
-
-        self._wpt_cpu.set(f"{wpt_cpu:.1f}%" if wpt_cpu is not None else "—")
-        self._wpt_ram.set(f"{wpt_ram} MB"   if wpt_ram is not None else "—")
-        self._app_cpu.set(f"{app_cpu:.1f}%")
-        self._app_ram.set(f"{app_ram} MB")
-
-    def _draw_graph(self):
-        W, H = self.GRAPH_W, self.GRAPH_H
-        c = self._graph
-        c.delete("all")
-        c.create_rectangle(0, 0, W, H, fill=BG, outline="")
-
-        if len(self._pings) < 2:
-            c.create_text(W // 2, H // 2, text=t("graph_collecting"),
-                          fill=DIM, font=("Segoe UI", 9))
-            return
-
-        pings = list(self._pings)
-        peak  = max(max(pings), 1)
-
-        def y_of(ms):
-            return H - max(2, int(ms / peak * (H - 4)))
-
-        # Reference lines at 50 ms and 100 ms
-        for ref_ms, label in ((50, "50ms"), (100, "100ms")):
-            if peak > ref_ms:
-                yr = y_of(ref_ms)
-                c.create_line(0, yr, W, yr, fill=BORDER, dash=(3, 5))
-                c.create_text(W - 2, yr - 2, text=label,
-                              fill=DIM, font=("Segoe UI", 6), anchor="se")
-
-        # Ping line
-        step   = W / max(PING_HISTORY - 1, 1)
-        offset = PING_HISTORY - len(pings)
-        pts    = []
-        for i, p in enumerate(pings):
-            pts += [int((i + offset) * step), y_of(p)]
-
-        last_color = GREEN if pings[-1] < 50 else (YELLOW if pings[-1] < 100 else RED)
-        if len(pts) >= 4:
-            c.create_line(*pts, fill=last_color, width=1, smooth=True)
-
-        # Latest dot
-        c.create_oval(pts[-2]-3, pts[-1]-3, pts[-2]+3, pts[-1]+3,
-                      fill=last_color, outline="")
-
-    def _on_close(self):
-        self._closed = True
-        if self._after_id:
-            self.after_cancel(self._after_id)
-        self.destroy()
-
-
 # ── Bankroll ──────────────────────────────────────────────────
 
 def _parse_amount(s):
@@ -351,7 +93,7 @@ def _read_bankroll_rows():
 
 
 class BankrollPromptDialog(tk.Toplevel):
-    """Shown automatically when a session ends — asks for buy-in/cash-out."""
+    """Shown when the user stops a manual session — asks for buy-in/cash-out."""
 
     def __init__(self, parent, start, end, elapsed, on_result):
         super().__init__(parent)
@@ -886,13 +628,12 @@ class App(tk.Tk):
         self._autostart_var = tk.BooleanVar(value=is_autostart_enabled())
         self._autostart_var.trace_add("write", self._on_autostart_change)
 
-        self._monitor_win  = None
         self._bankroll_win = None
 
         self._build_ui()
         self._setup_tray()
         self.protocol("WM_DELETE_WINDOW", self._hide_to_tray)
-        self._toggle()  # auto-start on launch
+        # Arrangement is opt-in; launching the utility must never move live windows.
 
     def _build_ui(self):
         outer = tk.Frame(self, bg=BG, padx=10, pady=8)
@@ -969,6 +710,8 @@ class App(tk.Tk):
         self._timer_btn = _btn(tr, "▶", self._timer_toggle, CARD,
                                font=("Segoe UI", 8, "bold"), padx=6, pady=2)
         self._timer_btn.pack(side="right")
+        _btn(tr, "■", self._timer_stop, CARD,
+             font=("Segoe UI", 8, "bold"), padx=6, pady=2).pack(side="right", padx=(0, 3))
 
         # Buttons
         self._toggle_btn = _make_toggle_btn(right, t("start_arranging"),
@@ -978,7 +721,6 @@ class App(tk.Tk):
         btn_row.pack(fill="x")
         for label, cmd in [(t("btn_slots"), self._open_editor),
                            (t("btn_reset"), self._rearrange),
-                           (t("btn_stats"), self._open_monitor),
                            (t("btn_bankroll"), self._open_bankroll)]:
             _btn(btn_row, label, cmd, CARD,
                  font=("Segoe UI", 8, "bold"), padx=4, pady=5
@@ -1065,6 +807,9 @@ class App(tk.Tk):
     def _timer_resume(self):
         if self._session_state == "running":
             return
+        if self._session_state == "stopped":
+            self._session_elapsed = 0.0
+            self._session_wall_start = datetime.now()
         self._session_start = time.monotonic()
         self._session_state = "running"
         self._timer_btn.config(text="‖")
@@ -1083,20 +828,25 @@ class App(tk.Tk):
         self._timer_render()
 
     def _timer_stop(self):
+        if self._session_state == "stopped":
+            return
         if self._session_state == "running":
             self._session_elapsed += time.monotonic() - self._session_start
+        completed_elapsed = self._session_elapsed
+        completed_start = self._session_wall_start
         self._session_start = None
         self._session_state = "stopped"
         self._timer_btn.config(text="▶")
         if self._timer_after_id:
             self.after_cancel(self._timer_after_id)
             self._timer_after_id = None
+        self._session_elapsed = 0.0
+        self._session_wall_start = None
         self._timer_render()
 
-        if self._session_wall_start is not None and self._session_elapsed > 0:
-            BankrollPromptDialog(self, self._session_wall_start, datetime.now(),
-                                 self._session_elapsed, self._log_session)
-        self._session_wall_start = None
+        if completed_start is not None and completed_elapsed > 0:
+            BankrollPromptDialog(self, completed_start, datetime.now(),
+                                 completed_elapsed, self._log_session)
 
     def _timer_tick(self):
         if self._session_state != "running":
@@ -1120,37 +870,11 @@ class App(tk.Tk):
             self._update_dot(GREEN if count > 0 else ACCENT)
             self._preview.set_occupied(self._manager.get_occupied_slot_ids())
 
-        was_tables = self._prev_table_count > 0
-        now_tables = count > 0
-
-        if not was_tables and now_tables:
-            # First table opened → reset and start timer
-            self._session_elapsed = 0.0
-            self._session_wall_start = datetime.now()
-            if self._timer_after_id:
-                self.after_cancel(self._timer_after_id)
-                self._timer_after_id = None
-            self._session_start = time.monotonic()
-            self._session_state = "running"
-            self._timer_btn.config(text="‖")
-            self._timer_tick()
-        elif was_tables and not now_tables and self._session_state == "running":
-            # All tables closed → stop but keep elapsed visible
-            self._timer_stop()
-
         self._prev_table_count = count
 
     def _rearrange(self):
         if self._arranging:
             self._manager.rearrange()
-
-    def _open_monitor(self):
-        if self._monitor_win is not None and self._monitor_win.winfo_exists():
-            self._monitor_win.deiconify()
-            self._monitor_win.lift()
-            self._monitor_win.focus_force()
-            return
-        self._monitor_win = MonitorWindow(self)
 
     def _on_swap_slots(self, idx_a, idx_b):
         if self._arranging:

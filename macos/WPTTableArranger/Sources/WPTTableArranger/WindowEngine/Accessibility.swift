@@ -63,18 +63,20 @@ final class AXWindow: Hashable {
     func position() -> CGPoint? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &value) == .success,
-              let axValue = value else { return nil }
+              let axValue = value as? AXValue,
+              AXValueGetType(axValue) == .cgPoint else { return nil }
         var point = CGPoint.zero
-        guard AXValueGetValue(axValue as! AXValue, .cgPoint, &point) else { return nil }
+        guard AXValueGetValue(axValue, .cgPoint, &point) else { return nil }
         return point
     }
 
     func size() -> CGSize? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &value) == .success,
-              let axValue = value else { return nil }
+              let axValue = value as? AXValue,
+              AXValueGetType(axValue) == .cgSize else { return nil }
         var s = CGSize.zero
-        guard AXValueGetValue(axValue as! AXValue, .cgSize, &s) else { return nil }
+        guard AXValueGetValue(axValue, .cgSize, &s) else { return nil }
         return s
     }
 
@@ -91,25 +93,18 @@ final class AXWindow: Hashable {
         return AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, axValue) == .success
     }
 
+    /// Move while preserving the size selected and accepted by the poker client itself.
+    ///
+    /// macOS AX does not expose a portable min/max-size contract for another app's windows.
+    /// Probing those limits would visibly force the live client through arbitrary sizes, so
+    /// this utility deliberately never writes AXSize. Users can resize a table through WPT;
+    /// subsequent arrangements retain that natural client-managed size.
     @discardableResult
-    private func setSize(_ size: CGSize) -> Bool {
-        var s = size
-        guard let axValue = AXValueCreate(.cgSize, &s) else { return false }
-        return AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, axValue) == .success
-    }
-
-    /// Move+resize, restoring from minimized first — mirrors move_window in window_manager.py.
-    /// Returns the rect actually observed right after, which can differ from `rect`: some
-    /// windows (WPT's poker tables in particular) silently clamp/ignore a size they won't
-    /// accept while still honoring the position, so the caller reads this back to learn the
-    /// window's natural size instead of assuming the request took effect.
-    @discardableResult
-    func moveAndResize(_ rect: WindowRect) -> WindowRect? {
+    func movePreservingSize(toX x: Int, y: Int) -> WindowRect? {
         if isMinimized {
             AXUIElementSetAttributeValue(element, kAXMinimizedAttribute as CFString, false as CFTypeRef)
         }
-        setPosition(CGPoint(x: rect.x, y: rect.y))
-        setSize(CGSize(width: rect.width, height: rect.height))
+        setPosition(CGPoint(x: x, y: y))
         return frame()
     }
 }

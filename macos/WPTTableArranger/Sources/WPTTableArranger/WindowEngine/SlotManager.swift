@@ -1,5 +1,11 @@
 import Foundation
 
+struct ArrangementStatus: Equatable {
+    let tableCount: Int
+    let totalWindowCount: Int
+    let occupiedSlotIds: Set<Int>
+}
+
 /// Port of slot_manager.py. All mutable state is only ever touched on `queue`, which plays
 /// the same role as the Python version's `threading.RLock`.
 ///
@@ -18,24 +24,19 @@ final class SlotManager {
 
     private var slots: [Slot]
     private var assignments: [AXWindow: Int] = [:]       // window -> slot id
-    private var setRects: [AXWindow: WindowRect] = [:]    // rect we told macOS to use
+    private var setRects: [AXWindow: WindowRect] = [:]    // position + natural size last observed
     private var actualRects: [AXWindow: WindowRect] = [:] // rect actually observed right after
-    // Size a window settled at when it refused our requested slot size (e.g. WPT's table
-    // windows are effectively fixed-size). A property of the window itself, not the slot
-    // assignment, so — unlike setRects/actualRects — it survives rearrange/updateSlots and is
-    // only dropped once the window is gone for good.
-    private var naturalSizes: [AXWindow: (width: Int, height: Int)] = [:]
     var lostPolls: [AXWindow: Int] = [:]
 
     private var running = false
     private var pollTimer: DispatchSourceTimer?
 
     var magnetEnabled: Bool
-    var onStatusChange: ((Int) -> Void)?
+    var onStatusChange: ((ArrangementStatus) -> Void)?
 
     var dragWatcher: DragWatcher?
 
-    init(slots: [Slot], magnetEnabled: Bool, onStatusChange: ((Int) -> Void)? = nil) {
+    init(slots: [Slot], magnetEnabled: Bool, onStatusChange: ((ArrangementStatus) -> Void)? = nil) {
         self.slots = slots
         self.magnetEnabled = magnetEnabled
         self.onStatusChange = onStatusChange
@@ -74,7 +75,6 @@ final class SlotManager {
             assignments.removeAll()
             setRects.removeAll()
             actualRects.removeAll()
-            naturalSizes.removeAll()
             lostPolls.removeAll()
         }
         pollTimer?.cancel()
@@ -139,7 +139,6 @@ final class SlotManager {
                         assignments.removeValue(forKey: window)
                         setRects.removeValue(forKey: window)
                         actualRects.removeValue(forKey: window)
-                        naturalSizes.removeValue(forKey: window)
                         lostPolls.removeValue(forKey: window)
                     }
                 } else {
@@ -193,38 +192,29 @@ final class SlotManager {
         queue.async { [weak self] in
             guard let self, self.running else { return }
             runPoll()
-            let count = self.assignments.count
-            DispatchQueue.main.async { self.onStatusChange?(count) }
+            let status = ArrangementStatus(
+                tableCount: self.assignments.keys.filter { tableSet.contains($0) }.count,
+                totalWindowCount: self.assignments.count,
+                occupiedSlotIds: Set(self.assignments.values)
+            )
+            DispatchQueue.main.async { self.onStatusChange?(status) }
         }
     }
 
     /// Move hwnd-equivalent to slot only if we haven't already placed it there. Caller must be
     /// on `queue`.
     ///
-    /// We never fight a window over size: if it previously refused our slot's exact dimensions
-    /// (WPT's table windows are effectively fixed-size and just clamp/ignore an AX resize),
-    /// `naturalSizes` already holds whatever it settled at, and we ask for that instead —
-    /// position still lands exactly on the slot's origin, only width/height fall back to what
-    /// the window will naturally accept.
+    /// Slot width/height define layout and drop areas only. Window size remains entirely under
+    /// the poker client's control; this method writes AXPosition but never AXSize.
     func applyPosition(_ window: AXWindow, _ slot: Slot) {
-        var target = slot.rect
-        if let natural = naturalSizes[window] {
-            target.width = natural.width
-            target.height = natural.height
-        }
+        guard let current = window.frame() else { return }
+        let target = WindowRect(x: slot.x, y: slot.y, width: current.width, height: current.height)
         if setRects[window] == target { return } // already placed — never touch a live window again
 
-        let actual = window.moveAndResize(target)
+        let actual = window.movePreservingSize(toX: target.x, y: target.y)
         setRects[window] = target
         guard let actual else { return }
         actualRects[window] = actual
-
-        if actual.width != target.width || actual.height != target.height {
-            naturalSizes[window] = (actual.width, actual.height)
-            // Record what we actually achieved, not the aspirational target, so the next poll
-            // recognizes this window is already settled instead of retrying a doomed resize.
-            setRects[window] = WindowRect(x: target.x, y: target.y, width: actual.width, height: actual.height)
-        }
     }
 
     // MARK: - Slot helpers

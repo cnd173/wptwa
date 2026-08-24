@@ -23,7 +23,10 @@ PYTHONPYCACHEPREFIX=.build/python-cache python3 -m py_compile legacy/windows/*.p
 
 - Keep arrangement opt-in; never start moving windows automatically.
 - Match supported clients by an explicit bundle identifier, not a broad process-name substring.
+- Positively identify movable windows and ignore unknown dialogs.
+- Preserve poker-client-managed window sizes; do not probe or force resize limits.
 - Do not add screen scraping, HUDs, strategy aids, automated seating, automated betting, or hidden process behavior.
+- Do not add poker-server probing, connection inspection, automatic session tracking, or process-performance monitoring.
 - Add or update tests for pure logic.
 - Document new permissions, subprocesses, network access, and persisted data.
 - Keep commits focused and explain user-visible behavior in the pull request.

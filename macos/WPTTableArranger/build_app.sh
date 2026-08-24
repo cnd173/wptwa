@@ -20,6 +20,17 @@ UNIVERSAL="${UNIVERSAL:-0}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 RELEASE_DIR="${RELEASE_DIR:-$PWD/release}"
+APP_VERSION="${APP_VERSION:-}"
+BUILD_NUMBER="${BUILD_NUMBER:-}"
+
+if [[ -n "$APP_VERSION" && ! "$APP_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    echo "error: APP_VERSION must be numeric SemVer without a v prefix" >&2
+    exit 1
+fi
+if [[ -n "$BUILD_NUMBER" && ! "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+    echo "error: BUILD_NUMBER must contain digits only" >&2
+    exit 1
+fi
 
 run_swift_build() {
     if [[ "${SWIFTPM_DISABLE_SANDBOX:-0}" == "1" ]]; then
@@ -35,6 +46,12 @@ stage_bundle() {
     mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
     cp "$executable_path" "$APP_DIR/Contents/MacOS/$BIN_NAME"
     cp "Info.plist" "$APP_DIR/Contents/Info.plist"
+    if [[ -n "$APP_VERSION" ]]; then
+        /usr/bin/plutil -replace CFBundleShortVersionString -string "$APP_VERSION" "$APP_DIR/Contents/Info.plist"
+    fi
+    if [[ -n "$BUILD_NUMBER" ]]; then
+        /usr/bin/plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$APP_DIR/Contents/Info.plist"
+    fi
 }
 
 if [[ "$UNIVERSAL" == "1" ]]; then
